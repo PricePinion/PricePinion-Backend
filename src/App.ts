@@ -106,7 +106,7 @@ class App {
         logger.info("Starting Scrape Jobs!");
         // Creating a scraperController object.
         const scraperController = new WebScraperController();
-        // Run the webscraper and store object results.
+        // Run the web scraper and store object results.
         const scrapeResults = await scraperController.runWebScrapers();
         // Creating an object productProcessor.
         const productProcessor = new ProductProcessor(this.Products);

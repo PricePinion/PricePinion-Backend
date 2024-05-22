@@ -61,10 +61,11 @@ class ProductProcessor {
                         currProduct.productName,
                         currProduct.storeName
                     );
-                // TODO: Create update product function, if the product exists in the DB update it. Currently only add the product if it does not exist yet.
-                // If the product does not exist at the current store we will add it to the product comparison section
-                if (!doesProductExistAtCurrStore) {
-                    await this.addToProductComparison(
+                if(doesProductExistAtCurrStore){
+                    await this.updateProductInfo(productRecord, currProduct);
+                }else{
+                    // The product does not exist at the current store we will add it to the product comparison section
+                    await this.addToOrUpdateProductComparison(
                         productRecord,
                         currProduct
                     );
@@ -96,28 +97,62 @@ class ProductProcessor {
         await this.Products.model.create(currProduct);
     }
     /**
-     * This function is responsible for adding a product to an existing product's productComparison field.
+     * This function is responsible for adding a product (or updating it) to an existing product's productComparison field.
      * Above we checked if the current product exists in the database. If we call this function that means the product exists
      * in the DB but it's not at the current store. In other words we found a product to compare.
      * We add it to the existing product's product comparison array.
      * @param productRecord This is the product that currently exists in the DB.
      * @param currProduct This is the current product we are examining.
      */
-    private async addToProductComparison(productRecord, currProduct) {
-        // Get the product comparison array from the product that already exists in the DB
-        const productComparison = productRecord.productComparison;
+    private async addToOrUpdateProductComparison(productRecord, currProduct) {
         // See if the product current exists in the product comparison array
-        const result = productComparison.find(
+        const result = productRecord.productComparison.find(
             (product) =>
                 product.productName === currProduct.productName &&
                 product.storeName === currProduct.storeName
         );
-        // If it doesn't then we need to add it
-        if (!result) {
+        if (result) {
+            const updatedComparison = this.updateProductComparison(currProduct, result);
+            Object.assign(result, updatedComparison);
+            await productRecord.save();
+        }else{
+            // If it does then we need to add it
             productRecord.productComparison.push(currProduct);
             await productRecord.save();
         }
-        // TODO: If the product does exist in the product comparison array, see if we need to update any of the fields
+    }
+    /**
+     * This function is responsible for updating a product's information.
+     * Above we checked if the current product exists in the database. If we call this function that means the product exists.
+     * We then go through and update the product's price, link, and image. 
+     * @param productRecord This is the product that currently exists in the DB.
+     * @param currProduct This is the current product we are examining.
+     */
+    private async updateProductInfo(productRecord, currProduct) {
+        if(productRecord.productPrice !== currProduct.productPrice){
+            productRecord.productPrice = currProduct.productPrice;
+        }
+        if(productRecord.productLink !== currProduct.productLink){
+            productRecord.productLink = currProduct.productLink;
+        }
+        if(productRecord.productImage !== currProduct.productImage){
+            productRecord.productImage = currProduct.productImage;
+        }
+        await productRecord.save();
+
+    }
+    private async updateProductComparison(currProduct, result){
+        if(result.productPrice !== currProduct.productPrice){
+            result.productPrice = currProduct.productPrice;
+        }
+        if(result.productLink !== currProduct.productLink){
+            result.productLink = currProduct.productLink;
+        }
+        if(result.productImage !== currProduct.productImage){
+            result.productImage = currProduct.productImage;
+        }
+        return result;
     }
 }
+
 export { ProductProcessor };
