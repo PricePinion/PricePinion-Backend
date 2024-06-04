@@ -64,7 +64,7 @@ class App {
         // Session setup
         this.expressApp.use(session({
             secret: process.env.SESSION_SECRET || "default_secret",
-            resave: false,
+            resave: true,
             saveUninitialized: false,
             store: MongoStore.create({ mongoUrl: mongoDBConnection })
         }));
@@ -133,6 +133,14 @@ class App {
                 res.redirect('http://localhost:4200'); // Redirect to your Angular dashboard
             }
         );
+
+        router.get('/user-data', (req, res) => {
+            if (req?.user) {
+                res.json({ user: req.user });
+            } else {
+                res.sendStatus(401);
+            }
+        });
 
 
         router.get('/auth/logout', (req, res, next) => {

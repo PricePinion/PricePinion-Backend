@@ -23,12 +23,12 @@ class CustomerModel {
                 customerID: String,
                 customerName: String,
                 customerEmail: String,
-                saveForLater: Array,
-                googleId: String, // To store the Google ID
-                displayName: String, // To store the display name from Google
-                firstName: String, // To store the first name from Google
-                lastName: String, // To store the last name from Google
-                image: String // To store the profile image URL from Google
+                saveForLater: [{ type: Mongoose.Schema.Types.ObjectId, ref: "Product" }], // Reference product model for type safety and data integrity
+                googleId: String,
+                displayName: String,
+                firstName: String,
+                lastName: String,
+                image: String,
             },
             { collection: "customers" }
         );
@@ -60,7 +60,7 @@ class CustomerModel {
                 lastName: name.familyName,
                 image: photos[0].value,
                 customerEmail: emails[0].value,
-                customerName: `${name.givenName} ${name.familyName}`
+                customerName: `${name.givenName} ${name.familyName}`,
             });
             await customer.save();
         }
@@ -70,13 +70,21 @@ class CustomerModel {
 
     public async saveComparisonForLater(req, res) {
         const productID = req.body.productID;
-        const productRecord = await this.Products.model
-            .findOne({ productID: productID })
-            .select("-_id -__v");
 
-        const customerRecord = await this.model.findOne({
-            googleId: req.user.googleId,
-        });
+        // Validate product ID (optional, but recommended for security)
+        if (!Mongoose.Types.ObjectId.isValid(productID)) {
+            return res.status(400).json({ message: "Invalid product ID" });
+        }
+
+        const productRecord = await this.Products.model
+            .findOne({ _id: productID }) // Use Mongoose's ObjectID for comparison
+            .select("-_id -__v"); // Exclude unnecessary fields
+
+        if (!productRecord) {
+            return res.status(404).json({ message: "Product not found" });
+        }
+
+        const customerRecord = await this.model.findOne({ googleId: req.user.googleId });
 
         try {
             if (this.isProductComparisonInSFL(productRecord, customerRecord)) {
@@ -97,22 +105,29 @@ class CustomerModel {
     }
 
     private isProductComparisonInSFL(productRecord: any, customerRecord: any): boolean {
-        const object = customerRecord.saveForLater.find(
-            (productComparisonInSFL) =>
-                productComparisonInSFL?.productID === productRecord.productID
+        return customerRecord.saveForLater.some(
+            (productComparisonInSFL) => productComparisonInSFL.toString() === productRecord._id.toString() // Use toString() for ObjectID comparison
         );
-        return !!object;
     }
 
     public async retrieveSaveForLater(req, res) {
-        const query = this.model
-            .findOne({ googleId: req.user.googleId })
-            .select("-_id -__v");
+        // Consider pagination for large collections (optional)
+        const limit = parseInt(req.query.limit as string, 10
+            || 10); // Default limit of 10 if not provided
+        const skip = parseInt(req.query.skip as string, 10) || 0; // Default skip of 0
+
+        const query = this.model.findOne({ googleId: req.user.googleId })
+            .select("-_id -__v") // Exclude unnecessary fields
+            .populate("saveForLater", "-_id -__v") // Populate product details with limited fields
+            .limit(limit)
+            .skip(skip);
+
         try {
             const customerRecord = await query.exec();
             res.json(customerRecord);
         } catch (error) {
             logger.error(error);
+            res.sendStatus(500);
         }
     }
 
@@ -133,12 +148,17 @@ class CustomerModel {
 
     public async deleteOneProductFromSFL(req, res) {
         const productID = req.params.productID;
+
+        // Validate product ID (optional, but recommended for security)
+        if (!Mongoose.Types.ObjectId.isValid(productID)) {
+            return res.status(400).json({ message: "Invalid product ID" });
+        }
+
         const query = this.model.findOne({ googleId: req.user.googleId });
         try {
             const customerRecord = await query.exec();
             customerRecord.saveForLater = customerRecord.saveForLater.filter(
-                (productComparisonInSFL) =>
-                    productComparisonInSFL.productID !== productID
+                (productComparisonInSFL) => productComparisonInSFL._id.toString() !== productID // Use Mongoose's ObjectID for comparison
             );
             await customerRecord.save();
             res.status(200).json({
