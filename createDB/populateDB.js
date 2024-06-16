@@ -1,28 +1,45 @@
-// Require fs for reading from JSON files that we'll use to populate the DB
 const fs = require("fs");
+const { MongoClient } = require("mongodb");
 
-// Read each of the JSON files containing data from mongo
-const productsCollectionAsJSON = fs.readFileSync("pricepinion.products.json");
+// Read each of the JSON files containing data
+const productsCollectionAsJSON = fs.readFileSync("createDB/pricepinion.json");
 
-//Parse all the JSON files containing the data we are going to insert
+// Parse the JSON files
 const productsObj = JSON.parse(productsCollectionAsJSON);
 
-// Connect to the local mongodb instance using the admin login
-db = connect(`mongodb://admin:pricepinion@localhost:27017/`);
+// Connection URI
+const uri = "mongodb://admin:pricepinion@localhost:27017/";
 
-// Get the sibling db (this will create the db if it doesn't exist already)
-db = db.getSiblingDB("pricepinion");
+// Create a new MongoClient
+const client = new MongoClient(uri);
 
-// Get (or create if it does not exist) the collections we need
-const productsCollection = db.getCollection("products");
+async function run() {
+    try {
+        // Connect to the MongoDB cluster
+        await client.connect();
 
-/**
- * Clear out each collection.
- * Why do this? Remove stale data, this script will only be used for dev/testing purposes
- * so we populate the Local MongoDB using only fresh data. In the event there is a specific test set of data
- * that needs to be used this will ensure the DB only includes that test set.
- */
-productsCollection.deleteMany({});
+        // Get the database
+        const db = client.db("pricepinion");
 
-// Use insert many to insert all of the information
-productsCollection.insertMany(productsObj);
+        // Get the collections we need
+        const productsCollection = db.collection("products");
+
+        // Clear out each collection
+        await productsCollection.deleteMany({});
+
+        // Use insertMany to insert all of the information
+        await productsCollection.insertMany(productsObj);
+
+        console.log("Database populated successfully!");
+    } catch (error) {
+        console.error(
+            "An error occurred while populating the database: ",
+            error
+        );
+    } finally {
+        // Close the connection to the MongoDB cluster
+        await client.close();
+    }
+}
+
+run().catch(console.dir);
